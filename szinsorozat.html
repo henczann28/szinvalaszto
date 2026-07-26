@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Színsorozat – Emlékezőjáték</title>
+
+<!-- =====================================================================
+     CSS – megjelenés
+     A stílus egy vidám, gyerekbarát, "gombóc" hangulatú felületet ad:
+     nagy, kerek gombok, meleg pasztell háttér, egyetlen "csillag"
+     kabalafigura, amely a játék hangulatát adja.
+     ===================================================================== -->
+<style>
+  :root {
+    --bg-top: #fff4e0;
+    --bg-bottom: #ffe3ec;
+    --ink: #4a3b32;
+    --card: #ffffff;
+    --accent: #ff8fab;
+    --accent-dark: #e85d8f;
+    --slot-empty: #eef1f5;
+    --slot-border: #cfd6e0;
+    --success: #4caf6d;
+    --fail: #e57373;
+    --shadow: 0 8px 20px rgba(74, 59, 50, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: "Comic Sans MS", "Trebuchet MS", Verdana, sans-serif;
+    /* rendszer-betűtípusok, hogy internet nélkül is szépen nézzen ki */
+    background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 640px;
+    padding: 24px 16px 48px;
+    text-align: center;
+  }
+
+  /* --- Kabalafigura: mosolygó csillag --- */
+  .mascot {
+    width: 84px;
+    height: 84px;
+    margin: 0 auto 8px;
+    transition: transform 0.4s ease;
+  }
+  .mascot.bounce { animation: bounce 0.6s ease; }
+  .mascot.wobble { animation: wobble 0.6s ease; }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    30% { transform: translateY(-18px) scale(1.08); }
+    60% { transform: translateY(0) scale(0.96); }
+  }
+  @keyframes wobble {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-8deg); }
+    75% { transform: rotate(8deg); }
+  }
+
+  h1 {
+    font-size: 2rem;
+    margin: 0 0 4px;
+    color: var(--accent-dark);
+    letter-spacing: 1px;
+  }
+
+  .subtitle {
+    margin: 0 0 20px;
+    font-size: 1.05rem;
+    opacity: 0.8;
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: 28px;
+    box-shadow: var(--shadow);
+    padding: 28px 20px;
+  }
+
+  /* --- Kezdőképernyő: nehézségi szint választó --- */
+  #start-screen .levels {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 8px;
+  }
+
+  .level-btn {
+    border: none;
+    border-radius: 20px;
+    padding: 18px 16px;
+    font-size: 1.15rem;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    color: #fff;
+    box-shadow: var(--shadow);
+    transition: transform 0.15s ease;
+  }
+  .level-btn:hover, .level-btn:focus-visible { transform: translateY(-2px) scale(1.02); }
+  .level-btn:active { transform: scale(0.97); }
+
+  .level-btn.easy   { background: linear-gradient(135deg, #7fd8a0, #4caf6d); }
+  .level-btn.medium { background: linear-gradient(135deg, #7fb8f0, #4d8fd6); }
+  .level-btn.hard   { background: linear-gradient(135deg, #f0a37f, #e06b3f); }
+
+  .level-desc {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: normal;
+    margin-top: 4px;
+    opacity: 0.95;
+  }
+
+  /* --- Játékképernyő --- */
+  #game-screen { display: none; }
+
+  .instruction {
+    font-size: 1.1rem;
+    font-weight: bold;
+    min-height: 1.6em;
+    margin-bottom: 10px;
+    color: var(--accent-dark);
+  }
+
+  .row-label {
+    font-size: 0.85rem;
+    opacity: 0.65;
+    margin: 14px 0 6px;
+  }
+
+  .circle-row {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 6px;
+  }
+
+  .circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 3px solid var(--slot-border);
+    background: var(--slot-empty);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .circle.filled { border-color: rgba(0,0,0,0.15); }
+
+  /* válaszkör: kattintható, kijelölhető */
+  .answer-slot {
+    cursor: pointer;
+  }
+  .answer-slot.selected {
+    border-color: var(--accent-dark);
+    box-shadow: 0 0 0 4px rgba(232, 93, 143, 0.25);
+    transform: scale(1.08);
+  }
+
+  /* paletta gombok */
+  .palette-btn {
+    cursor: pointer;
+    border: 3px solid rgba(0,0,0,0.1);
+  }
+  .palette-btn:hover, .palette-btn:focus-visible { transform: scale(1.1); }
+  .palette-btn:active { transform: scale(0.94); }
+
+  .actions {
+    margin-top: 22px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  button.main-btn {
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 18px;
+    padding: 14px 26px;
+    cursor: pointer;
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    box-shadow: var(--shadow);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  button.main-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  button.main-btn:not(:disabled):hover { transform: translateY(-2px); }
+
+  button.secondary-btn {
+    font-family: inherit;
+    font-size: 0.95rem;
+    border: 2px solid var(--accent);
+    background: #fff;
+    color: var(--accent-dark);
+    border-radius: 18px;
+    padding: 12px 20px;
+    cursor: pointer;
+  }
+
+  /* --- Eredmény felugró ablak --- */
+  #result-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(74, 59, 50, 0.45);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 10;
+  }
+  #result-modal.show { display: flex; }
+
+  .modal-box {
+    background: #fff;
+    border-radius: 24px;
+    padding: 30px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+  }
+  .modal-box h2 { margin-top: 0; font-size: 1.4rem; }
+  .modal-box.success h2 { color: var(--success); }
+  .modal-box.fail h2 { color: var(--fail); }
+
+  .correct-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 14px 0;
+  }
+  .correct-row .circle { width: 44px; height: 44px; cursor: default; }
+
+  @media (max-width: 420px) {
+    .circle { width: 46px; height: 46px; }
+    h1 { font-size: 1.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- =====================================================================
+     HTML – szerkezet
+     Három fő rész: kezdőképernyő (nehézségválasztó), játékképernyő,
+     és az eredményt mutató felugró ablak.
+     ===================================================================== -->
+<div id="app">
+
+  <!-- Kabalafigura: egyszerű SVG mosolygó csillag -->
+  <svg id="mascot" class="mascot" viewBox="0 0 100 100">
+    <polygon points="50,5 61,38 96,38 68,59 79,92 50,72 21,92 32,59 4,38 39,38"
+             fill="#ffce54" stroke="#f4a53a" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="40" cy="46" r="4" fill="#4a3b32"/>
+    <circle cx="60" cy="46" r="4" fill="#4a3b32"/>
+    <path d="M38 58 Q50 68 62 58" stroke="#4a3b32" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </svg>
+
+  <h1>Színsorozat</h1>
+  <p class="subtitle">Jegyezd meg a színeket, aztán rakd ki ugyanabban a sorrendben!</p>
+
+  <!-- ---------- KEZDŐKÉPERNYŐ: nehézségi szint választása ---------- -->
+  <div id="start-screen" class="card">
+    <p class="instruction" style="margin-bottom:16px;">Válassz szintet!</p>
+    <div class="levels">
+      <button class="level-btn easy" data-level="konnyu">
+        ⭐ Könnyű
+        <span class="level-desc">3 szín, sok idő a megjegyzéshez</span>
+      </button>
+      <button class="level-btn medium" data-level="kozepes">
+        ⭐⭐ Középszint
+        <span class="level-desc">4 szín, 8 másodperc</span>
+      </button>
+      <button class="level-btn hard" data-level="nehez">
+        ⭐⭐⭐ Haladó
+        <span class="level-desc">5 szín, kevesebb idő</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ---------- JÁTÉKKÉPERNYŐ ---------- -->
+  <div id="game-screen" class="card">
+    <p id="instruction" class="instruction">Nézd meg jól a színsort!</p>
+
+    <div class="row-label">A megjegyzendő sor</div>
+    <div id="sequence-row" class="circle-row"></div>
+
+    <div class="row-label">Ide rakd ki a válaszod</div>
+    <div id="answer-row" class="circle-row"></div>
+
+    <div class="row-label">Válassz színt</div>
+    <div id="palette-row" class="circle-row"></div>
+
+    <div class="actions">
+      <button id="peek-btn" class="secondary-btn" style="display:none;">👀 Mutasd újra</button>
+      <button id="check-btn" class="main-btn" disabled>ELLENŐRZÉS</button>
+    </div>
+    <div class="actions">
+      <button id="back-btn" class="secondary-btn">⬅ Vissza a szintekhez</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ---------- EREDMÉNY FELUGRÓ ABLAK ---------- -->
+<div id="result-modal">
+  <div id="modal-box" class="modal-box">
+    <h2 id="modal-title"></h2>
+    <p id="modal-text"></p>
+    <div id="modal-correct-row" class="correct-row" style="display:none;"></div>
+    <button id="retry-btn" class="main-btn">Új sorozat</button>
+  </div>
+</div>
+
+<!-- =====================================================================
+     JavaScript – a játék logikája
+     ===================================================================== -->
+<script>
+  // ---- Alapszínek (árnyalatok nélkül), amelyekből a szintek merítenek ----
+  const PALETTE = [
+    { name: 'piros',        hex: '#E53935' },
+    { name: 'kék',          hex: '#1E88E5' },
+    { name: 'zöld',         hex: '#43A047' },
+    { name: 'sárga',        hex: '#FDD835' },
+    { name: 'narancssárga', hex: '#FB8C00' },
+    { name: 'lila',         hex: '#8E24AA' },
+    { name: 'rózsaszín',    hex: '#EC407A' },
+    { name: 'barna',        hex: '#6D4C41' },
+    { name: 'türkizkék',    hex: '#00ACC1' },
+    { name: 'szürke',       hex: '#78909C' }
+  ];
+
+  // ---- A három differenciált nehézségi szint ----
+  // Mindhárom UGYANAZT a képességet fejleszti (munkamemória, figyelem,
+  // sorrendészlelés) — csak a terhelés (színek száma, idő, választék) tér el.
+  const LEVELS = {
+    konnyu:  { count: 3, poolSize: 6,  showTime: 12000, peekAllowed: true,  peekTime: 4000 },
+    kozepes: { count: 4, poolSize: 8,  showTime: 8000,  peekAllowed: false },
+    nehez:   { count: 5, poolSize: 10, showTime: 5000,  peekAllowed: false }
+  };
+
+  // ---- Állapot ----
+  let currentLevelKey = null;
+  let currentLevel = null;
+  let levelPalette = [];   // a szinten megjelenő választható színek
+  let sequence = [];       // a megjegyzendő sorrend (színobjektumok)
+  let answers = [];        // a játékos válasza (null vagy színobjektum, sorrendben)
+  let selectedSlot = null; // épp kijelölt üres kör indexe
+  let peekUsed = false;
+
+  // ---- Segédfüggvények ----
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function el(id) { return document.getElementById(id); }
+
+  function bounceMascot(type) {
+    const m = el('mascot');
+    m.classList.remove('bounce', 'wobble');
+    void m.offsetWidth; // animáció újraindítása
+    m.classList.add(type);
+  }
+
+  // ---- Szint indítása ----
+  document.querySelectorAll('.level-btn').forEach(btn => {
+    btn.addEventListener('click', () => startLevel(btn.dataset.level));
+  });
+  el('back-btn').addEventListener('click', showStartScreen);
+  el('retry-btn').addEventListener('click', () => {
+    el('result-modal').classList.remove('show');
+    startLevel(currentLevelKey);
+  });
+  el('check-btn').addEventListener('click', checkAnswer);
+  el('peek-btn').addEventListener('click', peekSequence);
+
+  function showStartScreen() {
+    el('start-screen').style.display = 'block';
+    el('game-screen').style.display = 'none';
+  }
+
+  function startLevel(levelKey) {
+    currentLevelKey = levelKey;
+    currentLevel = LEVELS[levelKey];
+    peekUsed = false;
+
+    // szinthez tartozó paletta kiválasztása és megkeverése
+    levelPalette = shuffle(PALETTE.slice(0, currentLevel.poolSize));
+
+    // véletlenszerű, nem ismétlődő sorrend a paletta elemeiből
+    sequence = shuffle(levelPalette).slice(0, currentLevel.count);
+
+    answers = new Array(currentLevel.count).fill(null);
+    selectedSlot = null;
+
+    el('start-screen').style.display = 'none';
+    el('game-screen').style.display = 'block';
+    el('peek-btn').style.display = currentLevel.peekAllowed ? 'inline-block' : 'none';
+    el('peek-btn').disabled = false;
+    el('check-btn').disabled = true;
+
+    renderSequenceRow(true);
+    renderAnswerRow();
+    renderPaletteRow();
+
+    el('instruction').textContent = 'Nézd meg jól a színsort!';
+
+    // a sorrend eltűnik a megadott idő után
+    setTimeout(() => {
+      renderSequenceRow(false);
+      el('instruction').textContent = 'Most rakd ki, amire emlékszel!';
+    }, currentLevel.showTime);
+  }
+
+  function peekSequence() {
+    if (peekUsed) return;
+    peekUsed = true;
+    el('peek-btn').disabled = true;
+    renderSequenceRow(true);
+    el('instruction').textContent = 'Nézd meg még egyszer!';
+    setTimeout(() => {
+      renderSequenceRow(false);
+      el('instruction').textContent = 'Most rakd ki, amire emlékszel!';
+    }, currentLevel.peekTime);
+  }
+
+  // ---- Megjelenítő függvények ----
+  function renderSequenceRow(showColors) {
+    const row = el('sequence-row');
+    row.innerHTML = '';
+    sequence.forEach(color => {
+      const c = document.createElement('div');
+      c.className = 'circle' + (showColors ? ' filled' : '');
+      c.style.background = showColors ? color.hex : '';
+      row.appendChild(c);
+    });
+  }
+
+  function renderAnswerRow() {
+    const row = el('answer-row');
+    row.innerHTML = '';
+    answers.forEach((color, i) => {
+      const c = document.createElement('div');
+      c.className = 'circle answer-slot' + (color ? ' filled' : '') + (selectedSlot === i ? ' selected' : '');
+      c.style.background = color ? color.hex : '';
+      c.addEventListener('click', () => selectSlot(i));
+      row.appendChild(c);
+    });
+  }
+
+  function renderPaletteRow() {
+    const row = el('palette-row');
+    row.innerHTML = '';
+    levelPalette.forEach(color => {
+      const c = document.createElement('div');
+      c.className = 'circle palette-btn filled';
+      c.style.background = color.hex;
+      c.title = color.name;
+      c.addEventListener('click', () => pickColor(color));
+      row.appendChild(c);
+    });
+  }
+
+  // ---- Játékos interakciók ----
+  function selectSlot(i) {
+    selectedSlot = i;
+    renderAnswerRow();
+  }
+
+  function pickColor(color) {
+    // ha nincs kijelölt kör, az elsőt válasszuk automatikusan
+    if (selectedSlot === null) {
+      selectedSlot = answers.findIndex(a => a === null);
+      if (selectedSlot === -1) selectedSlot = 0;
+    }
+    answers[selectedSlot] = color;
+
+    // ugorjunk a következő üres körre, ha van
+    const nextEmpty = answers.findIndex(a => a === null);
+    selectedSlot = nextEmpty;
+
+    renderAnswerRow();
+    updateCheckButton();
+  }
+
+  function updateCheckButton() {
+    el('check-btn').disabled = answers.some(a => a === null);
+  }
+
+  // ---- Ellenőrzés ----
+  function checkAnswer() {
+    const correct = answers.every((c, i) => c && c.name === sequence[i].name);
+
+    const box = el('modal-box');
+    box.className = 'modal-box ' + (correct ? 'success' : 'fail');
+    el('modal-title').textContent = correct
+      ? 'Gratulálok! Hibátlanul megoldottad a feladatot! 🎉'
+      : 'Most nem sikerült. Próbáld meg újra! 😊';
+    el('modal-text').textContent = correct
+      ? ''
+      : 'Nézd meg, mi lett volna a helyes sorrend:';
+
+    const correctRow = el('modal-correct-row');
+    if (correct) {
+      correctRow.style.display = 'none';
+      bounceMascot('bounce');
+    } else {
+      correctRow.style.display = 'flex';
+      correctRow.innerHTML = '';
+      sequence.forEach(color => {
+        const c = document.createElement('div');
+        c.className = 'circle filled';
+        c.style.background = color.hex;
+        correctRow.appendChild(c);
+      });
+      bounceMascot('wobble');
+    }
+
+    el('result-modal').classList.add('show');
+  }
+</script>
+
+</body>
+</html>
